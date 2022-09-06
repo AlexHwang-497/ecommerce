@@ -1,0 +1,111 @@
+from django.shortcuts import render
+from django.http import JsonResponse
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.response import Response
+
+from django.contrib.auth.models import User
+
+from .models import Product
+from .products import products
+from .serializers import ProductSerializer, UserSerializer, UserSerializerWithToken
+
+# # Create your views here.
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+from django.contrib.auth.hashers import make_password
+from rest_framework import status
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        # data['username'] = self.user.username
+        # data['email'] = self.user.email
+
+        serializer = UserSerializerWithToken(self.user).data
+        for key, value in serializer.items():
+            data[key] = value
+
+        return data
+
+
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
+
+
+@api_view(['POST'])
+def registerUser(request):
+    data = request.data
+    print('****registerUser.data',data,'*******')
+
+    try:
+        user = User.objects.create(
+            first_name=data['name'],
+            username=data['email'],
+            email=data['email'],
+            password=make_password(data['password'])
+        )
+
+        serializer = UserSerializerWithToken(user, many=False)
+        return Response(serializer.data)
+    except:
+        message = {'detail': 'User with this email already exists'}
+        return Response(message, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def getUserProfile(request):
+    user = request.user   
+    print('*****getUserProfile.user:',user,'*******')
+    serializer = UserSerializer(user, many=False)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def getUsers(request):
+    users = User.objects.all()
+    serializer = UserSerializer(users, many=True)
+    return Response(serializer.data)
+
+
+
+
+
+@api_view(['GET'])
+def getProducts(request):
+    # products = Product.objects.filter(name__icontains=query).order_by('-createdAt')
+    products = Product.objects.all()
+    # *this will help convert our data into JSON 
+    serializer = ProductSerializer(products, many=True)
+    return Response(serializer.data)
+    # return Response({'products': serializer.data, 'page': page, 'pages': paginator.num_pages})
+    # return Response(products)
+
+# ! pk = primary key
+@api_view(['GET'])
+def getProduct(request,pk):
+    # *this is for the static data we ran thsi here
+    # product = None
+    # for i in products:
+    #     if i['_id'] == pk:
+    #         product = i
+    #         break
+
+    product = Product.objects.get(_id=pk)
+    serializer = ProductSerializer(product, many=False)
+
+    return Response(serializer.data)
+    # return Response(product)
+
+
+
+
+
+# ! this is what we used oringlaly
+# @api_view(['GET'])
+# def getRoutes(request):
+#     routes=['hello','pooop','asdfasdf']
+#     return Response(routes)
